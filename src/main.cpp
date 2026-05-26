@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <WiFi.h>
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
