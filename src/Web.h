@@ -1,50 +1,76 @@
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
+#include <AsyncJson.h>
+#include <freertos/queue.h>
+#include <freertos/semphr.h>
 #include "Somfy.h"
 #ifndef webserver_h
 #define webserver_h
+
+#define WEB_CMD_QUEUE_SIZE 8
+#define WEB_CMD_TIMEOUT_MS 3000
+
+enum class web_cmd_t : uint8_t {
+    shade_command,
+    group_command,
+    tilt_command,
+    shade_repeat,
+    group_repeat,
+    set_positions,
+    shade_sensor,
+    group_sensor,
+};
+
+struct web_command_t {
+    web_cmd_t type;
+    uint8_t shadeId;
+    uint8_t groupId;
+    uint8_t target;
+    somfy_commands command;
+    int8_t repeat;
+    uint8_t stepSize;
+    int8_t position;
+    int8_t tiltPosition;
+    int8_t sunny;
+    int8_t windy;
+};
+
 class Web {
   public:
     bool uploadSuccess = false;
-    void sendCORSHeaders(WebServer &server);
-    void sendCacheHeaders(uint32_t seconds=604800);
     void startup();
-    void handleLogin(WebServer &server);
-    void handleLogout(WebServer &server);
-    void handleStreamFile(WebServer &server, const char *filename, const char *encoding);
-    void handleController(WebServer &server);
-    void handleLoginContext(WebServer &server);
-    void handleGetRepeaters(WebServer &server);
-    void handleGetRooms(WebServer &server);
-    void handleGetShades(WebServer &server);
-    void handleGetGroups(WebServer &server);
-    void handleShadeCommand(WebServer &server);
-    void handleRepeatCommand(WebServer &server);
-    void handleGroupCommand(WebServer &server);
-    void handleTiltCommand(WebServer &server);
-    void handleDiscovery(WebServer &server);
-    void handleNotFound(WebServer &server);
-    void handleRoom(WebServer &server);
-    void handleShade(WebServer &server);
-    void handleGroup(WebServer &server);
-    void handleSetPositions(WebServer &server);
-    void handleSetSensor(WebServer &server);
-    void handleDownloadFirmware(WebServer &server);
-    void handleBackup(WebServer &server, bool attach = false);
-    void handleReboot(WebServer &server);
-    void handleDeserializationError(WebServer &server, DeserializationError &err);
     void begin();
     void loop();
     void end();
-    // Web Handlers
+    // Auth helpers
     bool createAPIToken(const IPAddress ipAddress, char *token);
     bool createAPIToken(const char *payload, char *token);
     bool createAPIPinToken(const IPAddress ipAddress, const char *pin, char *token);
     bool createAPIPasswordToken(const IPAddress ipAddress, const char *username, const char *password, char *token);
-    bool isAuthenticated(WebServer &server, bool cfg = false);
+    bool isAuthenticated(AsyncWebServerRequest *request, bool cfg = false);
 
-    //void chunkRoomsResponse(WebServer &server, const char *elem = nullptr);
-    //void chunkShadesResponse(WebServer &server, const char *elem = nullptr);
-    //void chunkGroupsResponse(WebServer &server, const char *elem = nullptr);
-    //void chunkGroupResponse(WebServer &server, SomfyGroup *, const char *prefix = nullptr);
+    // Async API handlers
+    void handleDiscovery(AsyncWebServerRequest *request);
+    void handleGetRooms(AsyncWebServerRequest *request);
+    void handleGetShades(AsyncWebServerRequest *request);
+    void handleGetGroups(AsyncWebServerRequest *request);
+    void handleGetRepeaters(AsyncWebServerRequest *request);
+    void handleController(AsyncWebServerRequest *request);
+    void handleRoom(AsyncWebServerRequest *request);
+    void handleShade(AsyncWebServerRequest *request);
+    void handleGroup(AsyncWebServerRequest *request);
+    void handleLogin(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleShadeCommand(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleGroupCommand(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleTiltCommand(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleRepeatCommand(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleSetPositions(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleSetSensor(AsyncWebServerRequest *request, JsonVariant &json);
+    void handleDownloadFirmware(AsyncWebServerRequest *request);
+    void handleBackup(AsyncWebServerRequest *request);
+    void handleReboot(AsyncWebServerRequest *request);
+    void handleNotFound(AsyncWebServerRequest *request);
+  private:
+    void processQueue();
+    bool queueCommand(const web_command_t &cmd);
 };
 #endif

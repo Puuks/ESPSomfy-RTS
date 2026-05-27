@@ -3,6 +3,8 @@ debug_custom.json
 esp32.vsd
 esp32s3.svd
 debug.cfg
+logs/
+temp/
 
 SomfyController.ino.XIAO_ESP32S3.bin
 SomfyController.ino.esp32c3.bin
@@ -15,3 +17,6 @@ SomfyController.ino.esp32s2.bin
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Generated build artifacts (rebuilt by tools/minify_assets.py from data-src/)
+data/

@@ -3,6 +3,7 @@
 #include "Utils.h"
 #include "ConfigSettings.h"
 #include "SSDP.h"
+#include "Log.h"
 
 
 #define SSDP_PORT         1900
@@ -193,12 +194,12 @@ bool SSDPClass::begin() {
     return false;
   }
   for(uint8_t i = 0; i < this->m_cdeviceTypes; i++) {
-    Serial.printf("SSDP: %s - %s\n", this->deviceTypes[i].deviceType, this->deviceTypes[i].isActive ? "true" : "false");
+    LOGI("SSDP: %s - %s", this->deviceTypes[i].deviceType, this->deviceTypes[i].isActive ? "true" : "false");
   }
   this->isStarted = true;
   this->_sendByeBye();
   this->_sendNotify();
-  Serial.println("Connected to SSDP..."); 
+  LOGI("Connected to SSDP...");
   return true;
 }
 void SSDPClass::end() { 
@@ -206,10 +207,10 @@ void SSDPClass::end() {
   #ifdef DEBUG_SSDP
   DEBUG_SSDP.printf(PSTR("SSDP end ...\n "));
   #endif
-  if(this->_server.connected()) {
+    if(this->_server.connected()) {
     this->_sendByeBye();
     this->_server.close();
-    Serial.println("Disconnected from SSDP...");
+    LOGI("Disconnected from SSDP...");
   }
   this->isStarted = false;
   // Clear out the last notified so if the user starts us up again it will notify
@@ -432,7 +433,7 @@ void SSDPClass::_sendResponse(IPAddress addr, uint16_t port, const char *buff) {
 void SSDPClass::_sendNotify() {
   for(uint8_t i = 0; i < this->m_cdeviceTypes; i++) {
     UPNPDeviceType *dev = &this->deviceTypes[i];
-    if(i == 0 && (strlen(dev->deviceType) == 0 || !dev->isActive)) Serial.printf("The device type is empty: %s\n", dev->isActive ? "true" : "false");
+    if(i == 0 && (strlen(dev->deviceType) == 0 || !dev->isActive)) LOGW("The device type is empty: %s", dev->isActive ? "true" : "false");
     if(strlen(dev->deviceType) > 0 && dev->isActive) {
       unsigned long elapsed = (millis() - dev->lastNotified);
       if(!dev->lastNotified || (elapsed * 5) > (this->_interval * 1000)) {
@@ -653,28 +654,28 @@ void SSDPClass::_sendQueuedResponses() {
   }
 }
 void SSDPClass::_printPacket(ssdp_packet_t *pkt) {
-  Serial.printf("Rec: %lu\n", pkt->recvd);
+  LOGD("Rec: %lu", pkt->recvd);
   switch(pkt->method) {
     case NONE:
-      Serial.println("Method: NONE");
+      LOGD("Method: NONE");
       break;
     case SEARCH:
-      Serial.println("Method: SEARCH");
+      LOGD("Method: SEARCH");
       break;
     case NOTIFY:
-      Serial.println("Method: NOTIFY");
+      LOGD("Method: NOTIFY");
       break;
     default:
-      Serial.println("Method: UNKOWN");
+      LOGD("Method: UNKOWN");
       break;
   }
-  Serial.printf("ST: %s\n", pkt->st);
-  Serial.printf("MAN: %s\n", pkt->man);
-  Serial.printf("AGENT: %s\n", pkt->agent);
-  Serial.printf("HOST: %s\n", pkt->host);
-  Serial.printf("MX: %d\n", pkt->mx);
-  Serial.printf("type: %d\n", pkt->type);
-  Serial.printf("valid: %d\n", pkt->valid);
+  LOGD("ST: %s", pkt->st);
+  LOGD("MAN: %s", pkt->man);
+  LOGD("AGENT: %s", pkt->agent);
+  LOGD("HOST: %s", pkt->host);
+  LOGD("MX: %d", pkt->mx);
+  LOGD("type: %d", pkt->type);
+  LOGD("valid: %d", pkt->valid);
 }
 void SSDPClass::_processRequest(AsyncUDPPacket &p) {
   // This pending BS should probably be for unicast request only but we will play along for now.

@@ -6,6 +6,7 @@
 #include "ConfigSettings.h"
 #include "Utils.h"
 #include "esp_chip_info.h"
+#include "Log.h"
 
 Preferences pref;
 
@@ -85,7 +86,7 @@ bool appver_t::toJSON(JsonObject &obj) {
   obj["suffix"] = this->suffix;
   return true;
 }
-void appver_t::toJSON(JsonResponse &json) {
+void appver_t::toJSON(JsonFormatter &json) {
   json.addElem("name", this->name);
   json.addElem("major", this->major);
   json.addElem("minor", this->minor);
@@ -178,7 +179,7 @@ bool ConfigSettings::begin() {
       sprintf(this->chipModel, "UNK%d", static_cast<int>(ci.model));
       break;
   }
-  Serial.printf("Chip Model ESP32-%s\n", this->chipModel);
+  LOGI("Chip Model ESP32-%s", this->chipModel);
   this->fwVersion.parse(FW_VERSION);
   uint64_t mac = ESP.getEfuseMac();
   for(int i=0; i<17; i=i+8) {
@@ -249,7 +250,7 @@ bool ConfigSettings::toJSON(JsonObject &obj) {
   obj["checkForUpdate"] = this->checkForUpdate;
   return true;
 }
-void ConfigSettings::toJSON(JsonResponse &json) {
+void ConfigSettings::toJSON(JsonFormatter &json) {
   json.addElem("ssdpBroadcast", this->ssdpBroadcast);
   json.addElem("hostname", this->hostname);
   json.addElem("connType", static_cast<uint8_t>(this->connType));
@@ -267,7 +268,7 @@ bool ConfigSettings::fromJSON(JsonObject &obj) {
 }
 void ConfigSettings::print() {
   this->Security.print();
-  Serial.printf("Connection Type: %u\n", (unsigned int) this->connType);
+  LOGI("Connection Type: %u", (unsigned int) this->connType);
   this->NTP.print();
   if(this->connType == conn_types_t::wifi || this->connType == conn_types_t::unset) this->WIFI.print();
   if(this->connType == conn_types_t::ethernet || this->connType == conn_types_t::ethernetpref) this->Ethernet.print();
@@ -308,7 +309,7 @@ bool MQTTSettings::begin() {
   this->load();
   return true;
 }
-void MQTTSettings::toJSON(JsonResponse &json) {
+void MQTTSettings::toJSON(JsonFormatter &json) {
   json.addElem("enabled", this->enabled);
   json.addElem("pubDisco", this->pubDisco);
   json.addElem("protocol", this->protocol);
@@ -361,15 +362,21 @@ bool MQTTSettings::save() {
 }
 bool MQTTSettings::load() {
   pref.begin("MQTT");
-  pref.getString("protocol", this->protocol, sizeof(this->protocol));
-  pref.getString("hostname", this->hostname, sizeof(this->hostname));
+  if(pref.isKey("protocol")) pref.getString("protocol", this->protocol, sizeof(this->protocol));
+  else this->protocol[0] = '\0';
+  if(pref.isKey("hostname")) pref.getString("hostname", this->hostname, sizeof(this->hostname));
+  else this->hostname[0] = '\0';
   this->port = pref.getShort("port", 1883);
-  pref.getString("username", this->username, sizeof(this->username));
-  pref.getString("password", this->password, sizeof(this->password));
-  pref.getString("rootTopic", this->rootTopic, sizeof(this->rootTopic));
+  if(pref.isKey("username")) pref.getString("username", this->username, sizeof(this->username));
+  else this->username[0] = '\0';
+  if(pref.isKey("password")) pref.getString("password", this->password, sizeof(this->password));
+  else this->password[0] = '\0';
+  if(pref.isKey("rootTopic")) pref.getString("rootTopic", this->rootTopic, sizeof(this->rootTopic));
+  else this->rootTopic[0] = '\0';
   this->enabled = pref.getBool("enabled", false);
   this->pubDisco = pref.getBool("pubDisco", false);
-  pref.getString("discoTopic", this->discoTopic, sizeof(this->discoTopic));
+  if(pref.isKey("discoTopic")) pref.getString("discoTopic", this->discoTopic, sizeof(this->discoTopic));
+  else this->discoTopic[0] = '\0';
   pref.end();
   return true;
 }
@@ -408,17 +415,14 @@ bool NTPSettings::load() {
   return true;
 }
 void NTPSettings::print() {
-  Serial.println("NTP Settings ");
-  Serial.print(this->ntpServer);
-  Serial.print(" TZ:");
-  Serial.println(this->posixZone);  
+  LOGI("NTP Settings: server=%s TZ=%s", this->ntpServer, this->posixZone);
 }
 bool NTPSettings::fromJSON(JsonObject &obj) {
   this->parseValueString(obj, "ntpServer", this->ntpServer, sizeof(this->ntpServer));
   this->parseValueString(obj, "posixZone", this->posixZone, sizeof(this->posixZone));
   return true;
 }
-void NTPSettings::toJSON(JsonResponse &json) {
+void NTPSettings::toJSON(JsonFormatter &json) {
   json.addElem("ntpServer", this->ntpServer);
   json.addElem("posixZone", this->posixZone);
 }
@@ -459,7 +463,7 @@ bool IPSettings::toJSON(JsonObject &obj) {
   obj["dns2"] = this->dns2 == ipEmpty ? "" : this->dns2.toString();
   return true;  
 }
-void IPSettings::toJSON(JsonResponse &json) {
+void IPSettings::toJSON(JsonFormatter &json) {
   IPAddress ipEmpty(0,0,0,0);
   json.addElem("dhcp", this->dhcp);
   json.addElem("ip", this->ip.toString().c_str());
@@ -505,7 +509,7 @@ bool IPSettings::load() {
     pref.getString("dns2", buff, sizeof(buff));
     this->dns2.fromString(buff);
   }
-  Serial.printf("Preference IP Free Entries: %d\n", pref.freeEntries());
+  LOGD("Preference IP Free Entries: %d", pref.freeEntries());
   pref.end();
   return true;
 }
@@ -529,7 +533,7 @@ bool SecuritySettings::toJSON(JsonObject &obj) {
   obj["permissions"] = this->permissions;
   return true;  
 }
-void SecuritySettings::toJSON(JsonResponse &json) {
+void SecuritySettings::toJSON(JsonFormatter &json) {
   json.addElem("type", static_cast<uint8_t>(this->type));
   json.addElem("username", this->username);
   json.addElem("password", this->password);
@@ -559,16 +563,9 @@ bool SecuritySettings::load() {
   return true;
 }
 void SecuritySettings::print() {
-  Serial.print("SECURITY   Type:");
-  Serial.print(static_cast<uint8_t>(this->type));
-  Serial.print(" Username:[");
-  Serial.print(this->username);
-  Serial.print("] Password:[");
-  Serial.print(this->password);
-  Serial.print("] Pin:[");
-  Serial.print(this->pin);
-  Serial.print("] Permissions:");
-  Serial.println(this->permissions);
+  // Avoid printing sensitive secrets in plain text
+  LOGI("SECURITY Type:%u Username:[%s] Password:[REDACTED] Pin:[REDACTED] Permissions:%u",
+       static_cast<uint8_t>(this->type), this->username, this->permissions);
 }
 
 WifiSettings::WifiSettings() {}
@@ -590,7 +587,7 @@ bool WifiSettings::toJSON(JsonObject &obj) {
   obj["hidden"] = this->hidden;
   return true;
 }
-void WifiSettings::toJSON(JsonResponse &json) {
+void WifiSettings::toJSON(JsonFormatter &json) {
   json.addElem("ssid", this->ssid);
   json.addElem("passphrase", this->passphrase);
   json.addElem("roaming", this->roaming);
@@ -636,32 +633,15 @@ String WifiSettings::mapEncryptionType(int type) {
   return "Unknown";
 }
 void WifiSettings::print() {
-  Serial.println("WIFI Settings");
-  Serial.print(" SSID: [");
-  Serial.print(this->ssid);
-  Serial.print("] PassPhrase: [");
-  Serial.print(this->passphrase);
-  Serial.println("]");  
+  LOGI("WIFI Settings SSID:[%s] PassPhrase:[REDACTED]", this->ssid);
 }
 void WifiSettings::printNetworks() {
   int n = WiFi.scanNetworks(false, false);
-  Serial.print("Scanned ");
-  Serial.print(n);
-  Serial.println(" Networks...");
+  LOGD("Scanned %d Networks...", n);
   String network;
   for(int i = 0; i < n; i++) {
-    if(WiFi.SSID(i).compareTo(this->ssid) == 0) Serial.print("*");
-    else Serial.print(" ");
-    Serial.print(i);
-    Serial.print(": ");
-    Serial.print(WiFi.SSID(i));
-    Serial.print(" (");
-    Serial.print(WiFi.RSSI(i));
-    Serial.print("dBm) CH:");
-    Serial.print(WiFi.channel(i));
-    Serial.print(" MAC:");
-    Serial.print(WiFi.BSSIDstr(i));
-    Serial.println();
+    bool sel = (WiFi.SSID(i).compareTo(this->ssid) == 0);
+    LOGD("%s%u: %s (%ddBm) CH:%u MAC:%s", sel ? "*" : " ", i, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.channel(i), WiFi.BSSIDstr(i).c_str());
   }
 
 }
@@ -697,7 +677,7 @@ bool EthernetSettings::toJSON(JsonObject &obj) {
   obj["MDIOPin"] = this->MDIOPin;
   return true;
 }
-void EthernetSettings::toJSON(JsonResponse &json) {
+void EthernetSettings::toJSON(JsonFormatter &json) {
   json.addElem("boardType", this->boardType);
   json.addElem("phyAddress", this->phyAddress);
   json.addElem("CLKMode", static_cast<uint8_t>(this->CLKMode));
@@ -742,14 +722,9 @@ bool EthernetSettings::load() {
   return true;
 }
 void EthernetSettings::print() {
-  Serial.println("Ethernet Settings");
-  Serial.printf("Board:%d PHYType:%d CLK:%d ADDR:%d PWR:%d MDC:%d MDIO:%d\n", this->boardType, this->phyType, this->CLKMode, this->phyAddress, this->PWRPin, this->MDCPin, this->MDIOPin);
+  LOGI("Ethernet Settings");
+  LOGD("Board:%d PHYType:%d CLK:%d ADDR:%d PWR:%d MDC:%d MDIO:%d", this->boardType, this->phyType, this->CLKMode, this->phyAddress, this->PWRPin, this->MDCPin, this->MDIOPin);
 }
 void ConfigSettings::printAvailHeap() {
-  Serial.print("Max Heap: ");
-  Serial.println(ESP.getMaxAllocHeap());
-  Serial.print("Free Heap: ");
-  Serial.println(ESP.getFreeHeap());
-  Serial.print("Min Heap: ");
-  Serial.println(ESP.getMinFreeHeap());
+  LOGD("Heap: Max=%u Free=%u Min=%u", ESP.getMaxAllocHeap(), ESP.getFreeHeap(), ESP.getMinFreeHeap());
 }

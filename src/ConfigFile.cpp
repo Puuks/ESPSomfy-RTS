@@ -4,6 +4,7 @@
 #include "ConfigFile.h"
 #include "Utils.h"
 #include "ConfigSettings.h"
+#include "Log.h"
 
 extern Preferences pref;
 
@@ -63,7 +64,7 @@ bool ConfigFile::writeHeader(const config_header_t &hdr) {
 bool ConfigFile::readHeader() {
   if(!this->isOpen()) return false;
   //if(this->file.position() != 0) this->file.seek(0, SeekSet);
-  Serial.printf("Reading header at %u\n", this->file.position());
+  LOGD("Reading header at %u", this->file.position());
   this->header.version = this->readUInt8(this->header.version);
   this->header.length = this->readUInt8(0);
   if(this->header.version >= 19) {
@@ -88,7 +89,7 @@ bool ConfigFile::readHeader() {
     this->header.transRecordSize = this->readUInt16(this->header.transRecordSize);
     this->readString(this->header.serverId, sizeof(this->header.serverId));
   }
-  Serial.printf("version:%u len:%u roomSize:%u roomRecs:%u shadeSize:%u shadeRecs:%u groupSize:%u groupRecs: %u pos:%d\n", this->header.version, this->header.length, this->header.roomRecordSize, this->header.roomRecords, this->header.shadeRecordSize, this->header.shadeRecords, this->header.groupRecordSize, this->header.groupRecords, this->file.position());
+  LOGD("version:%u len:%u roomSize:%u roomRecs:%u shadeSize:%u shadeRecs:%u groupSize:%u groupRecs:%u pos:%d", this->header.version, this->header.length, this->header.roomRecordSize, this->header.roomRecords, this->header.shadeRecordSize, this->header.shadeRecords, this->header.groupRecordSize, this->header.groupRecords, this->file.position());
   return true;
 }
 /*
@@ -384,13 +385,11 @@ bool ShadeConfigFile::backup(SomfyShadeController *s) {
 bool ShadeConfigFile::validate() {
   this->readHeader();
   if(this->header.version < 1) {
-    Serial.print("Invalid Header Version:");
-    Serial.println(this->header.version);
+    LOGE("Invalid Header Version: %u", this->header.version);
     return false;
   }
   if(this->header.shadeRecordSize < 100) {
-    Serial.print("Invalid Shade Record Size:");
-    Serial.println(this->header.shadeRecordSize);
+    LOGE("Invalid Shade Record Size: %u", this->header.shadeRecordSize);
     return false;
   }
   /*
@@ -402,8 +401,7 @@ bool ShadeConfigFile::validate() {
   */
   if(this->header.version > 10) {
     if(this->header.groupRecordSize < 100) {
-      Serial.print("Invalid Group Record Size:");
-      Serial.println(this->header.groupRecordSize);
+      LOGE("Invalid Group Record Size: %u", this->header.groupRecordSize);
       return false;
     }
     /*
@@ -416,7 +414,7 @@ bool ShadeConfigFile::validate() {
     */
   }
   if(this->file.position() != this->header.length) {
-    Serial.printf("File not positioned at %u end of header: %d\n", this->header.length, this->file.position());
+    LOGE("File not positioned at %u end of header: %d", this->header.length, this->file.position());
     return false;
   }
   
@@ -433,7 +431,7 @@ bool ShadeConfigFile::validate() {
     fsize += (this->header.repeaterRecordSize * this->header.repeaterRecords);
   }
   if(this->file.size() != fsize) {
-    Serial.printf("File size is not correct should be %d and got %d\n", fsize, this->file.size());
+    LOGW("File size is not correct should be %d and got %d", fsize, this->file.size());
   }
   // Next check to see if the records match the header length.
   uint8_t recs = 0;
@@ -442,11 +440,11 @@ bool ShadeConfigFile::validate() {
     while(recs < this->header.roomRecords) {
       uint32_t pos = this->file.position();
       if(!this->seekChar(CFG_REC_END)) {
-        Serial.printf("Failed to find the room record end %d\n", recs);
+        LOGE("Failed to find the room record end %d", recs);
         return false;
       }
       if(this->file.position() - pos != this->header.roomRecordSize) {
-        Serial.printf("Room record length is %d and should be %d\n", this->file.position() - pos, this->header.roomRecordSize);
+        LOGE("Room record length is %d and should be %d", this->file.position() - pos, this->header.roomRecordSize);
         return false;
       }
       recs++;
@@ -456,11 +454,11 @@ bool ShadeConfigFile::validate() {
   while(recs < this->header.shadeRecords) {
     uint32_t pos = this->file.position();
     if(!this->seekChar(CFG_REC_END)) {
-      Serial.printf("Failed to find the shade record end %d\n", recs);
+      LOGE("Failed to find the shade record end %d", recs);
       return false;
     }
     if(this->file.position() - pos != this->header.shadeRecordSize) {
-      Serial.printf("Shade record length is %d and should be %d\n", this->file.position() - pos, this->header.shadeRecordSize);
+      LOGE("Shade record length is %d and should be %d", this->file.position() - pos, this->header.shadeRecordSize);
       return false;
     }
     recs++;
@@ -470,12 +468,12 @@ bool ShadeConfigFile::validate() {
     while(recs < this->header.groupRecords) {
       uint32_t pos = this->file.position();
       if(!this->seekChar(CFG_REC_END)) {
-        Serial.printf("Failed to find the group record end %d\n", recs);
+        LOGE("Failed to find the group record end %d", recs);
         return false;
       }
       recs++;
       if(this->file.position() - pos != this->header.groupRecordSize) {
-        Serial.printf("Group record length is %d and should be %d\n", this->file.position() - pos, this->header.groupRecordSize);
+        LOGE("Group record length is %d and should be %d", this->file.position() - pos, this->header.groupRecordSize);
         return false;
       }
     }
@@ -485,7 +483,7 @@ bool ShadeConfigFile::validate() {
     while(recs < this->header.repeaterRecords) {
       //uint32_t pos = this->file.position();
       if(!this->seekChar(CFG_REC_END)) {
-        Serial.printf("Failed to find the repeater record end %d\n", recs);
+        LOGW("Failed to find the repeater record end %d", recs);
       }
       recs++;
       
@@ -496,10 +494,21 @@ bool ShadeConfigFile::validate() {
 }
 bool ShadeConfigFile::load(SomfyShadeController *s, const char *filename) {
   ShadeConfigFile file;
+  if(!LittleFS.exists(filename)) {
+    LOGW("Shade config %s not found; skipping load", filename);
+    return false;
+  }
   if(file.begin(filename, true)) {
     bool success = file.loadFile(s, filename);
+    if(!success) {
+      LOGW("Shade config %s invalid; renaming to %s.corrupt", filename, filename);
+      String badname = String(filename) + ".corrupt";
+      file.end();
+      LittleFS.rename(filename, badname.c_str());
+      return false;
+    }
     file.end();
-    return success;
+    return true;
   }
   return false;
 }
@@ -515,30 +524,27 @@ bool ShadeConfigFile::restore(SomfyShadeController *s, const char *filename, res
 bool ShadeConfigFile::restoreFile(SomfyShadeController *s, const char *filename, restore_options_t &opts) {
   bool opened = false;
   if(!this->isOpen()) {
-    Serial.println("Opening shade restore file");
+    LOGI("Opening shade restore file");
     this->begin(filename, true);
     opened = true;
   }
   if(!this->validate()) {
-    Serial.println("Shade restore file invalid!");
+    LOGE("Shade restore file invalid!");
     if(opened) this->end();
     return false;
   }
   if(opts.shades) {
-    Serial.println("Restoring Rooms...");
+    LOGI("Restoring Rooms...");
     for(uint8_t i = 0; i < this->header.roomRecords; i++) {
       this->readRoomRecord(&s->rooms[i]);
-      if(i > 0) Serial.print(",");
-      Serial.print(s->rooms[i].roomId);
+      LOGD("RoomId: %u", s->rooms[i].roomId);
     }
-    Serial.println("Restoring Shades...");
+    LOGI("Restoring Shades...");
     // We should be valid so start reading.
     for(uint8_t i = 0; i < this->header.shadeRecords; i++) {
       this->readShadeRecord(&s->shades[i]);
-      if(i > 0) Serial.print(",");
-      Serial.print(s->shades[i].getShadeId());
+      LOGD("ShadeId: %u", s->shades[i].getShadeId());
     }
-    Serial.println("");
     if(this->header.shadeRecords < SOMFY_MAX_SHADES) {
       uint8_t ndx = this->header.shadeRecords;
       // Clear out any positions that are not in the shade file.
@@ -546,13 +552,11 @@ bool ShadeConfigFile::restoreFile(SomfyShadeController *s, const char *filename,
         ((SomfyShade *)&s->shades[ndx++])->clear();
       }
     }
-    Serial.println("Restoring Groups...");
+    LOGI("Restoring Groups...");
     for(uint8_t i = 0; i < this->header.groupRecords; i++) {
-      if(i > 0) Serial.print(",");
-      Serial.print(s->groups[i].getGroupId());
+      LOGD("GroupId: %u", s->groups[i].getGroupId());
       this->readGroupRecord(&s->groups[i]);
     }
-    Serial.println("");
     if(this->header.groupRecords < SOMFY_MAX_GROUPS) {
       uint8_t ndx = this->header.groupRecords;
       // Clear out any positions that are not in the shade file.
@@ -562,15 +566,15 @@ bool ShadeConfigFile::restoreFile(SomfyShadeController *s, const char *filename,
     }
   }
   else {
-    Serial.println("Shade data ignored");
+    LOGI("Shade data ignored");
     // FF past the shades and groups.
     this->file.seek(this->file.position()
       + (this->header.shadeRecords * this->header.shadeRecordSize)
       + (this->header.groupRecords * this->header.groupRecordSize), SeekSet);  // Start at the beginning of the file after the header.
   }
   if(opts.repeaters) {
-    Serial.println("Restoring Repeaters...");
-    if(this->header.repeaterRecords > 0) {
+    LOGI("Restoring Repeaters...");
+      if(this->header.repeaterRecords > 0) {
       memset(s->repeaters, 0x00, sizeof(uint32_t) * SOMFY_MAX_REPEATERS);
       for(uint8_t i = 0; i < this->header.repeaterRecords; i++) {
         this->readRepeaterRecord(s);
@@ -613,7 +617,7 @@ bool ShadeConfigFile::readNetRecord(restore_options_t &opts) {
   if(this->header.netRecordSize > 0) {
     uint32_t startPos = this->file.position();
     if(opts.network) {
-      Serial.println("Reading network settings from file...");
+      LOGI("Reading network settings from file...");
       settings.connType = static_cast<conn_types_t>(this->readUInt8(static_cast<uint8_t>(conn_types_t::unset)));
       settings.IP.dhcp = this->readBool(true);
       char ip[24];
@@ -659,7 +663,7 @@ bool ShadeConfigFile::readNetRecord(restore_options_t &opts) {
     // the ethernet phy settings.
     if(opts.network) {
       if(strncmp(settings.serverId, this->header.serverId, sizeof(settings.serverId)) == 0) {
-        Serial.println("Restoring Ethernet adapter settings");
+        LOGI("Restoring Ethernet adapter settings");
         settings.Ethernet.boardType = this->readUInt8(1);
         settings.Ethernet.phyType = static_cast<eth_phy_type_t>(this->readUInt8(0));
         settings.Ethernet.CLKMode = static_cast<eth_clock_mode_t>(this->readUInt8(0));
@@ -670,7 +674,7 @@ bool ShadeConfigFile::readNetRecord(restore_options_t &opts) {
       }
     }
     if(this->file.position() != startPos + this->header.netRecordSize) {
-      Serial.println("Reading to end of network record");
+      LOGW("Reading to end of network record");
       this->seekChar(CFG_REC_END);
     }
   }
@@ -679,7 +683,7 @@ bool ShadeConfigFile::readNetRecord(restore_options_t &opts) {
 bool ShadeConfigFile::readTransRecord(transceiver_config_t &cfg) {
   if(this->header.transRecordSize > 0) {
     uint32_t startPos = this->file.position();
-    Serial.println("Reading Transceiver settings from file...");
+    LOGI("Reading Transceiver settings from file...");
     cfg.enabled = this->readBool(false);
     cfg.proto = static_cast<radio_proto>(this->readUInt8(0));
     cfg.type = this->readUInt8(56);
@@ -694,7 +698,7 @@ bool ShadeConfigFile::readTransRecord(transceiver_config_t &cfg) {
     cfg.deviation = this->readFloat(cfg.deviation);
     cfg.txPower = this->readInt8(cfg.txPower);  
     if(this->file.position() != startPos + this->header.transRecordSize) {
-      Serial.println("Reading to end of transceiver record");
+      LOGW("Reading to end of transceiver record");
       this->seekChar(CFG_REC_END);
     }
     
@@ -704,7 +708,7 @@ bool ShadeConfigFile::readTransRecord(transceiver_config_t &cfg) {
 bool ShadeConfigFile::readSettingsRecord() {
   if(this->header.settingsRecordSize > 0) {
     uint32_t startPos = this->file.position();
-    Serial.println("Reading settings from file...");
+    LOGI("Reading settings from file...");
     char ver[24];
     this->readVarString(ver, sizeof(ver));
     this->readVarString(settings.hostname, sizeof(settings.hostname));
@@ -713,7 +717,7 @@ bool ShadeConfigFile::readSettingsRecord() {
     settings.ssdpBroadcast = this->readBool(false);
     if(this->header.version >= 20) settings.checkForUpdate = this->readBool(true);
     if(this->file.position() != startPos + this->header.settingsRecordSize) {
-      Serial.println("Reading to end of settings record");
+      LOGW("Reading to end of settings record");
       this->seekChar(CFG_REC_END);
     }
   }
@@ -753,7 +757,7 @@ bool ShadeConfigFile::readGroupRecord(SomfyGroup *group) {
   
   pref.end();
   if(this->file.position() != startPos + this->header.groupRecordSize) {
-    Serial.println("Reading to end of group record");
+    LOGW("Reading to end of group record");
     this->seekChar(CFG_REC_END);
   }
   return true;
@@ -765,7 +769,7 @@ bool ShadeConfigFile::readRepeaterRecord(SomfyShadeController *s) {
     s->linkRepeater(this->readUInt32(0));  
   }
   if(this->file.position() != startPos + this->header.repeaterRecordSize) {
-    Serial.println("Reading to end of repeater record");
+    LOGW("Reading to end of repeater record");
     this->seekChar(CFG_REC_END);
   }
   return true;
@@ -776,7 +780,7 @@ bool ShadeConfigFile::readRoomRecord(SomfyRoom *room) {
   this->readString(room->name, sizeof(room->name));
   room->sortOrder = this->readUInt8(room->roomId - 1);
   if(this->file.position() != startPos + this->header.roomRecordSize) {
-    Serial.println("Reading to end of room record");
+    LOGW("Reading to end of room record");
     this->seekChar(CFG_REC_END);
   }
   return true;
@@ -862,7 +866,7 @@ bool ShadeConfigFile::readShadeRecord(SomfyShade *shade) {
     pinMode(shade->gpioMy, OUTPUT);
   if(this->header.version >= 19) shade->roomId = this->readUInt8(0);
   if(this->file.position() != startPos + this->header.shadeRecordSize) {
-    Serial.println("Reading to end of shade record");
+    LOGW("Reading to end of shade record");
     this->seekChar(CFG_REC_END);
   }
   return true;
@@ -870,12 +874,12 @@ bool ShadeConfigFile::readShadeRecord(SomfyShade *shade) {
 bool ShadeConfigFile::loadFile(SomfyShadeController *s, const char *filename) {
   bool opened = false;
   if(!this->isOpen()) {
-    Serial.println("Opening shade config file");
+    LOGI("Opening shade config file");
     this->begin(filename, true);
     opened = true;
   }
   if(!this->validate()) {
-    Serial.println("Shade config file invalid!");
+    LOGE("Shade config file invalid!");
     if(opened) this->end();
     return false;
   }
@@ -917,7 +921,7 @@ bool ShadeConfigFile::loadFile(SomfyShadeController *s, const char *filename) {
       this->readRepeaterRecord(s);
   }
   if(opened) {
-    Serial.println("Closing shade config file");
+    LOGI("Closing shade config file");
     this->end();
   }
   return true;

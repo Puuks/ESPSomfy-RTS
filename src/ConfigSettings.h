@@ -34,7 +34,7 @@ struct appver_t {
   char suffix[4] = "";
   void parse(const char *ver);
   bool toJSON(JsonObject &obj);
-  void toJSON(JsonResponse &json);
+  void toJSON(JsonFormatter &json);
   void toJSON(JsonSockEvent *json);
   int8_t compare(appver_t &ver);
   void copy(appver_t &ver);
@@ -46,7 +46,7 @@ class BaseSettings {
     bool loadFile(const char* filename);
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool parseIPAddress(JsonObject &obj, const char *prop, IPAddress *);
     bool parseValueString(JsonObject &obj, const char *prop, char *dest, size_t size);
     int parseValueInt(JsonObject &obj, const char *prop, int defVal);
@@ -61,7 +61,7 @@ class NTPSettings: BaseSettings {
     char posixZone[64] = "";
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool apply();
     bool begin();
     bool save();
@@ -79,7 +79,7 @@ class WifiSettings: BaseSettings {
     bool begin();
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     String mapEncryptionType(int type);
     bool ssidExists(const char *ssid);
     void printNetworks();
@@ -102,7 +102,7 @@ class EthernetSettings: BaseSettings {
     bool begin();
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool load();
     bool save();
     void print();
@@ -120,7 +120,7 @@ class IPSettings: BaseSettings {
     bool begin();
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool load();
     bool save();
     void print();
@@ -145,7 +145,7 @@ class SecuritySettings: BaseSettings {
     bool load();
     void print();
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool fromJSON(JsonObject &obj);
 };
 class MQTTSettings: BaseSettings {
@@ -163,7 +163,7 @@ class MQTTSettings: BaseSettings {
     bool save();
     bool load();
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool fromJSON(JsonObject &obj);
 };
 class ConfigSettings: BaseSettings {
@@ -187,7 +187,7 @@ class ConfigSettings: BaseSettings {
     bool requiresAuth();
     bool fromJSON(JsonObject &obj);
     bool toJSON(JsonObject &obj);
-    void toJSON(JsonResponse &json);
+    void toJSON(JsonFormatter &json);
     bool begin();
     bool save();
     bool load();
