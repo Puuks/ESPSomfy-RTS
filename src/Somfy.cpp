@@ -4620,10 +4620,16 @@ void Transceiver::enableReceive(void) {
       rxmode = 1;
       pinMode(this->config.RXPin, INPUT);
       interruptPin = digitalPinToInterrupt(this->config.RXPin);
+      LOGI("Radio RX: pin=%u, interruptPin=%d", this->config.RXPin, interruptPin);
+      if(interruptPin < 0) {
+        LOGE("ERROR: digitalPinToInterrupt returned %d - invalid RX pin!", interruptPin);
+      }
       ELECHOUSE_cc1101.SetRx();
-      //attachInterrupt(interruptPin, handleReceive, FALLING);
       attachInterrupt(interruptPin, handleReceive, CHANGE);
-      LOGD("Enabled receive on Pin #%d Timing: %ld\n", this->config.RXPin, millis() - timing);
+      int rssi = ELECHOUSE_cc1101.getRssi();
+      LOGI("Radio receive enabled - initial RSSI: %d dBm (timing: %lu ms)", rssi, millis() - timing);
+    } else {
+      LOGW("enableReceive called but radio is disabled");
     }
 }
 void Transceiver::disableReceive(void) { 
@@ -4917,7 +4923,10 @@ void transceiver_config_t::apply() {
       pref.putBool("radioInit", false);
       this->radioInit = false;
       pref.end();
-      if(!radioInit) return;
+      if(!radioInit) {
+        LOGE("Radio init skipped - previous init failed (radioInit=false in NVS)");
+        return;
+      }
       LOGD("Applying radio settings ", "Applying radio settings ");
       LOGD("Setting Data Pins RX:%u TX:%u\n", this->RXPin, this->TXPin);
       //if(this->TXPin != this->RXPin)
@@ -4966,11 +4975,13 @@ void transceiver_config_t::apply() {
     
       
       if (!ELECHOUSE_cc1101.getCC1101()) {
-          LOGI("Error setting up the radio");
+          LOGE("CC1101 SPI communication FAILED - check wiring! SCK:%u MISO:%u MOSI:%u CSN:%u", this->SCKPin, this->MISOPin, this->MOSIPin, this->CSNPin);
           this->radioInit = false;
       }
       else {
-          LOGI("Successfully set up the radio");
+          LOGI("CC1101 SPI communication OK");
+          LOGI("Radio config: freq=%.2f MHz, rxBW=%.2f kHz, dev=%.2f kHz, txPwr=%d", this->frequency, this->rxBandwidth, this->deviation, this->txPower);
+          LOGI("Pin config: SCK=%u, MISO=%u, MOSI=%u, CSN=%u, TX=%u, RX=%u", this->SCKPin, this->MISOPin, this->MOSIPin, this->CSNPin, this->TXPin, this->RXPin);
           somfy.transceiver.enableReceive();
           this->radioInit = true;
       }
@@ -5014,6 +5025,18 @@ bool Transceiver::begin() {
     return true;
 }
 void Transceiver::loop() {
+  static unsigned long lastRadioCheck = 0;
+  // Periodic radio health check every 30 seconds
+  if(this->config.enabled && this->config.radioInit && millis() - lastRadioCheck > 30000) {
+    lastRadioCheck = millis();
+    int rssi = ELECHOUSE_cc1101.getRssi();
+    bool cc1101ok = ELECHOUSE_cc1101.getCC1101();
+    LOGI("Radio health: CC1101=%s, RSSI=%d dBm, rxmode=%u, rx_queue=%u", 
+         cc1101ok ? "OK" : "FAIL", rssi, rxmode, rx_queue.length);
+    if(!cc1101ok) {
+      LOGE("CC1101 lost SPI contact! Check connections.");
+    }
+  }
   somfy_rx_t rx;
   if(rxmode == 3) {
     if(this->receive(&rx))

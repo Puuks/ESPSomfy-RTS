@@ -865,8 +865,8 @@ void Web::begin() {
     resp.endObject();
     resp.endResponse();
   });
-  asyncServer.on("/downloadFirmware", HTTP_GET, [](AsyncWebServerRequest *r) { webServer.handleDownloadFirmware(r); });
-  asyncServer.on("/cancelFirmware", HTTP_GET, [](AsyncWebServerRequest *request) {
+  asyncServer.on("/downloadFirmware", HTTP_GET | HTTP_PUT, [](AsyncWebServerRequest *r) { webServer.handleDownloadFirmware(r); });
+  asyncServer.on("/cancelFirmware", HTTP_GET | HTTP_PUT, [](AsyncWebServerRequest *request) {
     if(!git.lockFS) {
       git.status = GIT_UPDATE_CANCELLING;
       AsyncJsonResp resp;
@@ -1027,6 +1027,15 @@ void Web::begin() {
     SomfyShade *shade = (shadeId != 255) ? somfy.getShadeById(shadeId) : nullptr;
     if(!shade) { request->send(500, _encoding_json, F("{\"status\":\"ERROR\",\"desc\":\"Shade not found to pair\"}")); return; }
     shade->paired = paired; shade->save();
+    AsyncJsonResp resp; resp.beginResponse(request, g_content, sizeof(g_content)); resp.beginObject(); shade->toJSON(resp); resp.endObject(); resp.endResponse();
+  }));
+  asyncServer.addHandler(new AsyncCallbackJsonWebHandler("/pairShade", [](AsyncWebServerRequest *request, JsonVariant &json) {
+    uint8_t shadeId = 255;
+    if(!json.isNull()) { JsonObject obj = json.as<JsonObject>(); if(obj.containsKey("shadeId")) shadeId = obj["shadeId"]; }
+    SomfyShade *shade = (shadeId != 255) ? somfy.getShadeById(shadeId) : nullptr;
+    if(!shade) { request->send(500, _encoding_json, F("{\"status\":\"ERROR\",\"desc\":\"Shade not found to pair\"}")); return; }
+    if(shade->bitLength == 56) shade->sendCommand(somfy_commands::Prog, 7); else shade->sendCommand(somfy_commands::Prog, 1);
+    shade->paired = true; shade->save();
     AsyncJsonResp resp; resp.beginResponse(request, g_content, sizeof(g_content)); resp.beginObject(); shade->toJSON(resp); resp.endObject(); resp.endResponse();
   }));
   asyncServer.addHandler(new AsyncCallbackJsonWebHandler("/unpairShade", [](AsyncWebServerRequest *request, JsonVariant &json) {
@@ -1338,11 +1347,11 @@ void Web::begin() {
     for(JsonVariant v : arr) { uint8_t groupId = v.as<uint8_t>(); if(groupId != 255) { SomfyGroup *group = somfy.getGroupById(groupId); if(group) group->sortOrder = order++; } }
     request->send(200, _encoding_json, "{\"status\":\"OK\",\"desc\":\"Successfully set group order\"}");
   }));
-  asyncServer.on("/beginFrequencyScan", HTTP_GET, [](AsyncWebServerRequest *request) {
+  asyncServer.on("/beginFrequencyScan", HTTP_GET | HTTP_PUT, [](AsyncWebServerRequest *request) {
     somfy.transceiver.beginFrequencyScan();
     AsyncJsonResp resp; resp.beginResponse(request, g_content, sizeof(g_content)); resp.beginObject(); somfy.transceiver.toJSON(resp); resp.endObject(); resp.endResponse();
   });
-  asyncServer.on("/endFrequencyScan", HTTP_GET, [](AsyncWebServerRequest *request) {
+  asyncServer.on("/endFrequencyScan", HTTP_GET | HTTP_PUT, [](AsyncWebServerRequest *request) {
     somfy.transceiver.endFrequencyScan();
     AsyncJsonResp resp; resp.beginResponse(request, g_content, sizeof(g_content)); resp.beginObject(); somfy.transceiver.toJSON(resp); resp.endObject(); resp.endResponse();
   });
@@ -1385,6 +1394,7 @@ void Web::begin() {
       } else request->send(500, _encoding_json, F("{\"status\":\"ERROR\",\"desc\":\"Group Id not found.\"}"));
     } else request->send(500, _encoding_json, F("{\"status\":\"ERROR\",\"desc\":\"You must supply a valid group id.\"}"));
   });
+  asyncServer.on("/repeaters", HTTP_GET, [](AsyncWebServerRequest *r) { webServer.handleGetRepeaters(r); });
   asyncServer.addHandler(new AsyncCallbackJsonWebHandler("/linkRepeater", [](AsyncWebServerRequest *request, JsonVariant &json) {
     uint32_t address = 0;
     if(!json.isNull()) { JsonObject obj = json.as<JsonObject>(); if(obj.containsKey("address")) address = obj["address"]; else if(obj.containsKey("remoteAddress")) address = obj["remoteAddress"]; }
